@@ -1,0 +1,8 @@
+# VS code files
+.vscode
+
+# go files
+go.sum
+
+# bin files
+serverMain
