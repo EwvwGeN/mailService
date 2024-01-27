@@ -26,8 +26,7 @@ func NewSMTPHandler(ctx context.Context, cfg config.SMTPConfig, lg *slog.Logger)
 	}
 }
 
-func (s *SMTPHandler) Start(ctx context.Context, closer chan struct{}) {
-	msgChan := make(chan *gomail.Message)
+func (s *SMTPHandler) Start(ctx context.Context, closer chan struct{}, msgChan chan *gomail.Message) {
 	errChan := make(chan error)
 
 	var closed *bool
