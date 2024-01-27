@@ -11,6 +11,7 @@ import (
 type Config struct {
 	LogLevel string `mapstructure:"log_level"`
 	Port int `mapstructure:"port"`
+	SMTP SMTPConfig `mapstructure:"smtp"`
 }
 
 func LoadConfig(path string) (*Config, error) {
