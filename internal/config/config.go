@@ -12,6 +12,7 @@ type Config struct {
 	LogLevel string `mapstructure:"log_level"`
 	Port int `mapstructure:"port"`
 	SMTP SMTPConfig `mapstructure:"smtp"`
+	RabbitMQ RabbitMQConfig `mapstructure:"rabbitmq"`
 }
 
 func LoadConfig(path string) (*Config, error) {

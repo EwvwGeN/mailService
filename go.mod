@@ -2,7 +2,11 @@ module github.com/EwvwGeN/mailService
 
 go 1.21.5
 
-require github.com/spf13/viper v1.18.2
+require (
+	github.com/rabbitmq/amqp091-go v1.9.0
+	github.com/spf13/viper v1.18.2
+	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
+)
 
 require (
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
@@ -23,7 +27,6 @@ require (
 	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
-	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
