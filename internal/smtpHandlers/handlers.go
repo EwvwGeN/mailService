@@ -1,4 +1,4 @@
-package smtphandlers
+package smtphandler
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/EwvwGeN/mailService/internal/config"
+	"github.com/EwvwGeN/mailService/internal/structs"
 	"gopkg.in/gomail.v2"
 )
 
@@ -17,54 +18,62 @@ type SMTPHandler struct {
 	dialer *gomail.Dialer
 }
 
-func NewSMTPHandler(ctx context.Context, cfg config.SMTPConfig, lg *slog.Logger) *SMTPHandler {
+func NewSMTPHandler(ctx context.Context, lg *slog.Logger, cfg config.SMTPConfig) *SMTPHandler {
 	dialer := gomail.NewDialer(cfg.Host, cfg.Port, cfg.Username, cfg.Password)
 	return &SMTPHandler{
-		logger: lg,
+		logger: lg.With(slog.String("op", "smtp")),
 		config: cfg,
 		dialer: dialer,
 	}
 }
 
-func (s *SMTPHandler) Start(ctx context.Context, closer chan struct{}, msgChan chan *gomail.Message) {
-	errChan := make(chan error)
-
-	var closed *bool
+func (s *SMTPHandler) Start(ctx context.Context, closer chan struct{}, msgChan chan *structs.Message) (chan error) {
+	var (
+		errChan chan error = make(chan error)
+		outErrChan chan error = make(chan error)
+		closed bool = false
+		err error
+	)
 
 	receiverGroupe := new(sync.WaitGroup)
 
 	for i := 0; i < s.config.NodeCfg.NodeCount; i++ {
 		receiverGroupe.Add(1)
-		go s.MessageReceiver(ctx, receiverGroupe, msgChan, errChan, closed)
+		go s.MessageReceiver(ctx, receiverGroupe, msgChan, errChan, &closed)
 	}
 
-	for {
-		select {
-			case <- closer: {
-				*closed = true
-				receiverGroupe.Wait()
-				return
-			}
-			case err := <-errChan: {
-				if err != nil {
-					s.logger.Error("error occurred", slog.String("error", err.Error()))
+	go func() {
+		for {
+			select {
+				case <- closer: {
+					closed = true
+					receiverGroupe.Wait()
+					outErrChan <- err
+					return
 				}
-				if s.config.NodeCfg.AlwaysRestart {
-					s.logger.Info("receiver restart attempt")
-					receiverGroupe.Add(1)
-					go s.MessageReceiver(ctx, receiverGroupe, msgChan, errChan, closed)
-					continue
-				}
-				if s.config.NodeCfg.CancelOnError {
-					s.logger.Info("close all receivers")
-					*closed = true
+				case err = <-errChan: {
+					if err != nil {
+						s.logger.Error("error occurred", slog.String("error", err.Error()))
+					}
+					if s.config.NodeCfg.AlwaysRestart {
+						s.logger.Info("receiver restart attempt")
+						receiverGroupe.Add(1)
+						go s.MessageReceiver(ctx, receiverGroupe, msgChan, errChan, &closed)
+						continue
+					}
+					if s.config.NodeCfg.CancelOnError {
+						s.logger.Info("closing all receivers")
+						closed = true
+					}
 				}
 			}
 		}
-	}
+	}()
+	return outErrChan
+	
 }
 
-func (s *SMTPHandler) MessageReceiver(ctx context.Context, rg *sync.WaitGroup, msgChan chan *gomail.Message, errChan chan error, closed *bool) {
+func (s *SMTPHandler) MessageReceiver(ctx context.Context, rg *sync.WaitGroup, msgChan chan *structs.Message, errChan chan error, closed *bool) {
 	defer rg.Done()
 	var (
 		sendCloser gomail.SendCloser
@@ -106,10 +115,12 @@ func (s *SMTPHandler) MessageReceiver(ctx context.Context, rg *sync.WaitGroup, m
 	errChan <- err
 }
 
-func (s *SMTPHandler) SendMessage(ctx context.Context, wg *sync.WaitGroup, sender gomail.Sender, msg *gomail.Message) {
+func (s *SMTPHandler) SendMessage(ctx context.Context, wg *sync.WaitGroup, sender gomail.Sender, msg *structs.Message) {
 	defer wg.Done()
 	for i := 0; i < s.config.RetriesCount; i++ {
-		err := gomail.Send(sender, msg)
+		m := ConvertMessage(msg)
+		m.SetHeader("From", s.config.EmailFrom)
+		err := gomail.Send(sender, m)
 		if err != nil {
 			s.logger.Error(
 				ErrSendMessage.Error(),
@@ -118,6 +129,7 @@ func (s *SMTPHandler) SendMessage(ctx context.Context, wg *sync.WaitGroup, sende
 			)
 			continue
 		}
+		msg.AckFunc()
 		return
 	}
 	

@@ -1,4 +1,4 @@
-package smtphandlers
+package smtphandler
 
 import "errors"
 
