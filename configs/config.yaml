@@ -1,0 +1,31 @@
+log_level: debug
+port: 9999
+smtp:
+  host: localhost
+  port: 1025
+  username: ""
+  password: ""
+  email_from: "mailservice@mail.ru"
+  node:
+    node_count: 1
+    alws_restart: false
+    cancel_on_error: true
+  retries_count: 5
+rabbitmq:
+  scheme: amqp
+  host: localhost
+  port: 5672
+  username: user1
+  password: 123
+  virtual_host: vhost1
+  connection_name: testConn
+  exchanger:
+    name: test_exchanger
+    type: direct
+  binding:
+    key: test-key
+  queue:
+    name: test-queue
+  consumer:
+    tag: simple-consumer
+    auto_ack: false 
