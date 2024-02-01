@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/EwvwGeN/mailService/internal/config"
+	"github.com/EwvwGeN/mailService/internal/structs"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -19,7 +20,7 @@ type consumer struct {
 
 func NewConsumer(ctx context.Context, lg *slog.Logger, cfg config.RabbitMQConfig) (*consumer, error) {
 	c := &consumer{
-		logger: lg,
+		logger: lg.With(slog.String("op", "queue")),
 		cfg: cfg,
 		conn:    nil,
 		channel: nil,
@@ -106,7 +107,7 @@ func NewConsumer(ctx context.Context, lg *slog.Logger, cfg config.RabbitMQConfig
 	return c, nil
 }
 
-func (c *consumer) Start() (chan string, error) {
+func (c *consumer) Start() (chan *structs.Message, error) {
 	c.logger.Info("starting Consume", slog.String("tag", c.cfg.ConsumerConfig.Tag))
 	deliveries, err := c.channel.Consume(
 		c.cfg.QueueConfig.Name,
@@ -121,9 +122,8 @@ func (c *consumer) Start() (chan string, error) {
 		c.logger.Error(ErrStartConsume.Error(), slog.String("error", err.Error()))
 		return nil, fmt.Errorf("%s: %w", ErrStartConsume.Error(), err)
 	}
-	outChan := make(chan string)
+	outChan := make(chan *structs.Message)
 	go func() {
-
 		cleanup := func() {
 			c.logger.Info("deliveries channel closed")
 			c.done <- nil
@@ -136,9 +136,26 @@ func (c *consumer) Start() (chan string, error) {
 				"got delivery",
 				slog.Int("byte", len(d.Body)),
 			)
-			outChan <- string(d.Body)
-			if c.cfg.ConsumerConfig.AutoAck{
-				d.Ack(false)
+			emailTo, ok := d.Headers["To"]
+			if !ok {
+				c.logger.Error("incorrect headers of message")
+				continue
+			}
+			subject, ok := d.Headers["Subject"]
+			if !ok {
+				c.logger.Error("incorrect headers of message")
+				continue
+			}
+			msg := &structs.Message{
+				Subject: subject.(string),
+				EmailTo: emailTo.(string),
+				Body: d.Body,
+			}
+			outChan <- msg
+			if !c.cfg.ConsumerConfig.AutoAck {
+				msg.AckFunc = func() {
+					d.Ack(false)
+				}
 			}
 		}
 	}()

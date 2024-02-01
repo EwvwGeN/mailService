@@ -5,6 +5,7 @@ type SMTPConfig struct {
 	Port         int        `mapstructure:"port"`
 	Username     string     `mapstructure:"username"`
 	Password     string     `mapstructure:"password"`
+	EmailFrom    string     `mapstructure:"email_from"`
 	NodeCfg      NodeConfig `mapstructure:"node"`
 	RetriesCount int        `mapstructure:"retries_count"`
 }
