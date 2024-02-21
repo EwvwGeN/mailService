@@ -1,0 +1,51 @@
+version: "3"
+
+services:
+
+  rabbitmq:
+    image: rabbitmq:3.6-management-alpine
+    ports:
+        - 5672:5672
+        - 15672:15672
+    volumes:
+        - ./rabbit/rabbitmq.config:/etc/rabbitmq/rabbitmq.config:ro
+        - ./rabbit/definitions.json:/etc/rabbitmq/definitions.json:ro
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "localhost", "5672" ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - serviceNet
+
+  mailpit:
+    image: axllent/mailpit
+    restart: always
+    volumes:
+      - ./data:/data
+    ports:
+      - 8025:8025
+      - 1025:1025
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_DATA_FILE: /data/mailpit.db
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+
+  server:
+    env_file:
+      .env
+    environment:
+      RABBITMQ.HOST: rabbitmq
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    depends_on:
+      rabbitmq:
+        condition: "service_healthy"
+    networks:
+      - serviceNet
+
+networks:
+  serviceNet:
+    driver: bridge
