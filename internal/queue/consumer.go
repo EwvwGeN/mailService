@@ -15,7 +15,6 @@ type consumer struct {
 	cfg config.RabbitMQConfig
 	conn    *amqp.Connection
 	channel *amqp.Channel
-	done    chan error
 }
 
 func NewConsumer(ctx context.Context, lg *slog.Logger, cfg config.RabbitMQConfig) (*consumer, error) {
@@ -24,7 +23,6 @@ func NewConsumer(ctx context.Context, lg *slog.Logger, cfg config.RabbitMQConfig
 		cfg: cfg,
 		conn:    nil,
 		channel: nil,
-		done:    make(chan error),
 	}
 
 	var err error
@@ -124,13 +122,6 @@ func (c *consumer) Start() (chan *structs.Message, error) {
 	}
 	outChan := make(chan *structs.Message)
 	go func() {
-		cleanup := func() {
-			c.logger.Info("deliveries channel closed")
-			c.done <- nil
-		}
-	
-		defer cleanup()
-
 		for d := range deliveries {
 			c.logger.Info(
 				"got delivery",
@@ -139,11 +130,13 @@ func (c *consumer) Start() (chan *structs.Message, error) {
 			emailTo, ok := d.Headers["To"]
 			if !ok {
 				c.logger.Error("incorrect headers of message")
+				d.Ack(false)
 				continue
 			}
 			subject, ok := d.Headers["Subject"]
 			if !ok {
 				c.logger.Error("incorrect headers of message")
+				d.Ack(false)
 				continue
 			}
 			msg := &structs.Message{
@@ -158,20 +151,17 @@ func (c *consumer) Start() (chan *structs.Message, error) {
 				}
 			}
 		}
+		c.logger.Info("cancel consuming")
 	}()
 	return outChan, nil
 }
 
 func (c *consumer) Shutdown() error {
-	if err := c.channel.Cancel(c.cfg.ConsumerConfig.Tag, true); err != nil {
-		return fmt.Errorf("consumer cancel failed: %s", err)
-	}
-
 	if err := c.conn.Close(); err != nil {
 		return fmt.Errorf("AMQP connection close error: %s", err)
 	}
 
 	defer c.logger.Info("AMQP shutdown OK")
 
-	return <-c.done
+	return nil
 }
