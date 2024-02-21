@@ -62,6 +62,7 @@ func main() {
 	if err != nil {
 		logger.Error("failed to close the consumer", slog.String("error", err.Error()))
 	}
+	logger.Info("consumer closed")
 	closer <- struct{}{}
 	logger.Info("service stopped")
 
